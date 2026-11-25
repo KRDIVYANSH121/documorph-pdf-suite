@@ -5,17 +5,15 @@ import { ImageToPdfTool } from './components/ImageToPdfTool';
 import { CompressPdfTool } from './components/CompressPdfTool';
 import { PdfToFormatsTool } from './components/PdfToFormatsTool';
 import { MergePdfTool } from './components/MergePdfTool';
+import { OmniConverterTool } from './components/OmniConverterTool';
 import { Footer } from './components/Footer';
 import { ShieldCheck, Sparkles, Zap, Lock, RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabId>('image-to-pdf');
+  const [activeTab, setActiveTab] = useState<TabId>('omni-converter');
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return (
-        localStorage.getItem('theme') === 'dark' ||
-        (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)
-      );
+      return localStorage.getItem('theme') === 'dark';
     }
     return false;
   });
@@ -30,29 +28,50 @@ export const App: React.FC = () => {
     }
   }, [darkMode]);
 
+  // Harden client UI against casual right-click / DevTools shortcuts in production
+  useEffect(() => {
+    const blockContext = (e: MouseEvent) => e.preventDefault();
+    const blockInspectKeys = (e: KeyboardEvent) => {
+      const key = e.key.toUpperCase();
+      if (
+        e.key === 'F12' ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['I', 'J', 'C'].includes(key)) ||
+        ((e.ctrlKey || e.metaKey) && key === 'U')
+      ) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('contextmenu', blockContext);
+    document.addEventListener('keydown', blockInspectKeys);
+    return () => {
+      document.removeEventListener('contextmenu', blockContext);
+      document.removeEventListener('keydown', blockInspectKeys);
+    };
+  }, []);
+
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-200 select-none">
       <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} activeTab={activeTab} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-10">
         {/* Hero Section */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/40 text-xs font-semibold">
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 text-xs font-bold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Fast, Secure & 100% Free PDF Suite</span>
+            <span>Fast, Secure &amp; Universal File Converter</span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Convert, Compress & Transform{' '}
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400">
-              PDFs Instantly
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-neutral-900 dark:text-white">
+            Convert, Compress &amp; Transform{' '}
+            <span className="text-red-600 dark:text-red-400">
+              Any File Format
             </span>
           </h1>
 
-          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed">
-            Convert uploaded photos into professional PDFs, shrink PDF file size by up to 80%, or extract pages into crisp PNG, JPG, WebP images and text.
+          <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-400 leading-relaxed">
+            Convert 90+ formats across documents, spreadsheets, media, eBooks, archives, and 3D/CAD — fast, private, and reliable.
           </p>
         </div>
 
@@ -62,7 +81,8 @@ export const App: React.FC = () => {
         </div>
 
         {/* Active Tool View */}
-        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm rounded-3xl border border-slate-200/80 dark:border-slate-800/80 p-6 sm:p-10 shadow-xl shadow-slate-200/40 dark:shadow-none">
+        <div className="bg-white dark:bg-neutral-900 rounded-3xl border-2 border-red-100 dark:border-red-900/50 p-6 sm:p-10 shadow-xl shadow-red-500/5 dark:shadow-none">
+          {activeTab === 'omni-converter' && <OmniConverterTool />}
           {activeTab === 'image-to-pdf' && <ImageToPdfTool />}
           {activeTab === 'compress-pdf' && <CompressPdfTool />}
           {activeTab === 'pdf-to-formats' && <PdfToFormatsTool />}
@@ -70,37 +90,37 @@ export const App: React.FC = () => {
         </div>
 
         {/* Feature Badges */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6">
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 shadow-sm flex flex-col items-center text-center space-y-1.5">
-            <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
+          <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-red-100 dark:border-red-900/40 shadow-sm flex flex-col items-center text-center space-y-1.5">
+            <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
               <Lock className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Zero Server Uploads</span>
-            <span className="text-[11px] text-slate-500">Processed locally in browser</span>
+            <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100">Hardened Security</span>
+            <span className="text-[11px] text-neutral-500">Magic-byte & Zip-Bomb guards</span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 shadow-sm flex flex-col items-center text-center space-y-1.5">
-            <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+          <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-red-100 dark:border-red-900/40 shadow-sm flex flex-col items-center text-center space-y-1.5">
+            <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
               <Zap className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">High-Speed Engine</span>
-            <span className="text-[11px] text-slate-500">Multithreaded canvas & WebAssembly</span>
+            <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100">Smart Routing</span>
+            <span className="text-[11px] text-neutral-500">Fast &amp; heavy workload queues</span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 shadow-sm flex flex-col items-center text-center space-y-1.5">
-            <div className="w-8 h-8 rounded-full bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+          <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-red-100 dark:border-red-900/40 shadow-sm flex flex-col items-center text-center space-y-1.5">
+            <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
               <RefreshCw className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Multiple Formats</span>
-            <span className="text-[11px] text-slate-500">JPG, PNG, WebP, PDF & TXT</span>
+            <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100">90+ File Formats</span>
+            <span className="text-[11px] text-neutral-500">Docs, Media, Archives &amp; CAD</span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800/80 shadow-sm flex flex-col items-center text-center space-y-1.5">
-            <div className="w-8 h-8 rounded-full bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-400 flex items-center justify-center">
+          <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-red-100 dark:border-red-900/40 shadow-sm flex flex-col items-center text-center space-y-1.5">
+            <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">No Watermarks</span>
-            <span className="text-[11px] text-slate-500">Clean and 100% free forever</span>
+            <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100">Private Processing</span>
+            <span className="text-[11px] text-neutral-500">Isolated ephemeral workspaces</span>
           </div>
         </div>
       </main>

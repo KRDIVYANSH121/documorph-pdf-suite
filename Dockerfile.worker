@@ -1,0 +1,23 @@
+# Isolated Ephemeral Worker Container for Sandboxed `--network=none` Execution
+FROM debian:bookworm-slim
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    ffmpeg \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
+    pandoc \
+    imagemagick \
+    inkscape \
+    calibre \
+    p7zip-full \
+    woff2 \
+    assimp-utils \
+    python3-fonttools \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /usr/sbin/nologin worker
+USER worker
+WORKDIR /work
