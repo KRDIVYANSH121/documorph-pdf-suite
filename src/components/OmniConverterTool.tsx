@@ -24,7 +24,12 @@ import {
   Search,
 } from 'lucide-react';
 import { DropZone } from './DropZone';
-import { formatBytes, triggerConfetti } from '../utils/fileHelpers';
+import { downloadBlob, formatBytes, triggerConfetti } from '../utils/fileHelpers';
+import {
+  canConvertInBrowser,
+  convertInBrowser,
+  inspectZipInBrowser,
+} from '../utils/browserOmniEngine';
 
 type FormatCategory =
   | 'documents'
@@ -272,10 +277,12 @@ export const OmniConverterTool: React.FC = () => {
   const [jobError, setJobError] = useState<string | null>(null);
   const [jobStatusText, setJobStatusText] = useState<string>('');
   const [completedJob, setCompletedJob] = useState<{
-    jobId: string;
+    jobId?: string;
+    blobUrl?: string;
+    blob?: Blob;
     filename: string;
     size: number;
-    sha256: string;
+    sha256?: string;
     elapsedMs: number;
     lane: string;
   } | null>(null);
@@ -386,10 +393,18 @@ export const OmniConverterTool: React.FC = () => {
   };
 
   const handleInspectArchive = async () => {
-    if (!selectedFile || !backendOnline) return;
+    if (!selectedFile) return;
     setIsInspecting(true);
     setJobError(null);
     try {
+      if (!backendOnline) {
+        if (sourceExt === 'zip' || sourceExt === 'cbz') {
+          const data = await inspectZipInBrowser(selectedFile);
+          setArchiveInspection(data);
+          return;
+        }
+        throw new Error('Inspecting RAR/7Z/TAR/ISO requires the conversion server.');
+      }
       const fd = new FormData();
       fd.append('file', selectedFile);
       if (archivePassword) fd.append('password', archivePassword);
@@ -411,12 +426,43 @@ export const OmniConverterTool: React.FC = () => {
 
   const handleConvert = async () => {
     if (!selectedFile) return;
+
     if (!backendOnline) {
-      setJobError(
-        'Conversion server is not reachable at ' +
-          (baseUrl || window.location.origin) +
-          '. Start the conversion service to run this conversion.'
-      );
+      if (!canConvertInBrowser(sourceExt, targetExt)) {
+        setJobError(
+          `Converting ${sourceExt.toUpperCase()} → ${targetExt.toUpperCase()} requires the full conversion server. On-device mode supports Images, PDF, Markdown/HTML/TXT, CSV/TSV/JSON, and ZIP/CBZ.`
+        );
+        return;
+      }
+
+      setIsConverting(true);
+      setJobError(null);
+      setCompletedJob(null);
+      setJobStatusText('Converting directly on your device...');
+      try {
+        const res = await convertInBrowser(selectedFile, sourceExt, targetExt, {
+          dpi,
+          quality,
+          grayscale,
+          compressionLevel,
+          selectedEntries,
+        });
+        const blobUrl = URL.createObjectURL(res.blob);
+        setCompletedJob({
+          blobUrl,
+          blob: res.blob,
+          filename: res.filename,
+          size: res.blob.size,
+          elapsedMs: res.elapsedMs,
+          lane: 'On-Device',
+        });
+        triggerConfetti();
+        downloadBlob(res.blob, res.filename);
+      } catch (err: any) {
+        setJobError(err.message || 'On-device conversion failed');
+      } finally {
+        setIsConverting(false);
+      }
       return;
     }
 
@@ -553,22 +599,22 @@ export const OmniConverterTool: React.FC = () => {
         </div>
 
         {/* Server Endpoint + Click-Open Formats Sidebar Button */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center space-x-2 bg-white/15 border border-white/25 rounded-xl px-3 py-1.5 backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full lg:w-auto">
+          <div className="flex items-center space-x-2 bg-white/15 border border-white/25 rounded-xl px-3 py-1.5 backdrop-blur-sm w-full sm:w-auto">
             <Server className="w-3.5 h-3.5 text-white shrink-0" />
             <input
               type="text"
               value={apiBase}
               onChange={(e) => setApiBase(e.target.value)}
-              placeholder="Same origin (or http://localhost:8080)"
-              className="bg-transparent text-xs text-white placeholder-red-200 focus:outline-none w-48"
+              placeholder="Same origin (or server URL)"
+              className="bg-transparent text-xs text-white placeholder-red-200 focus:outline-none w-full sm:w-48"
               aria-label="Conversion Server URL"
             />
           </div>
           <button
             type="button"
             onClick={() => setIsSidebarOpen(true)}
-            className="px-4 py-2 rounded-xl bg-white text-red-600 hover:bg-red-50 font-bold text-xs shadow-sm flex items-center gap-2 transition-all"
+            className="px-4 py-2 rounded-xl bg-white text-red-600 hover:bg-red-50 font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-all shrink-0"
           >
             <PanelLeftOpen className="w-4 h-4" />
             <span>Open Formats Sidebar</span>
@@ -992,7 +1038,7 @@ export const OmniConverterTool: React.FC = () => {
                   </select>
                 </div>
 
-                {selectedFile && backendOnline && (
+                {selectedFile && (backendOnline || sourceExt === 'zip' || sourceExt === 'cbz') && (
                   <button
                     type="button"
                     onClick={handleInspectArchive}
@@ -1000,7 +1046,7 @@ export const OmniConverterTool: React.FC = () => {
                     className="w-full py-2 px-3 rounded-xl border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 font-semibold flex items-center justify-center gap-1.5"
                   >
                     {isInspecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
-                    <span>Inspect Entries & Check Safety</span>
+                    <span>Inspect Entries &amp; Check Safety</span>
                   </button>
                 )}
               </div>
@@ -1092,18 +1138,31 @@ export const OmniConverterTool: React.FC = () => {
                   <p className="font-semibold text-neutral-900 dark:text-white truncate">
                     {completedJob.filename} ({formatBytes(completedJob.size)})
                   </p>
-                  <p className="font-mono truncate" title={completedJob.sha256}>
-                    SHA-256: {completedJob.sha256.slice(0, 16)}...
-                  </p>
+                  {completedJob.sha256 && (
+                    <p className="font-mono truncate" title={completedJob.sha256}>
+                      SHA-256: {completedJob.sha256.slice(0, 16)}...
+                    </p>
+                  )}
                 </div>
-                <a
-                  href={`${baseUrl}/api/v1/jobs/${completedJob.jobId}/download`}
-                  download={completedJob.filename}
-                  className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Output</span>
-                </a>
+                {completedJob.blob ? (
+                  <button
+                    type="button"
+                    onClick={() => downloadBlob(completedJob.blob!, completedJob.filename)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Output</span>
+                  </button>
+                ) : (
+                  <a
+                    href={`${baseUrl}/api/v1/jobs/${completedJob.jobId}/download`}
+                    download={completedJob.filename}
+                    className="w-full py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Output</span>
+                  </a>
+                )}
               </div>
             )}
           </div>
@@ -1128,7 +1187,7 @@ export const OmniConverterTool: React.FC = () => {
         <div className="fixed inset-0 z-50 flex">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setIsSidebarOpen(false)}
           />
 
@@ -1231,26 +1290,34 @@ export const OmniConverterTool: React.FC = () => {
                   2. Reachable Output Formats ({filteredReachableTargets.length})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {filteredReachableTargets.map((fmt) => (
-                    <button
-                      key={fmt.ext}
-                      type="button"
-                      onClick={() => {
-                        setTargetExt(fmt.ext);
-                        setIsSidebarOpen(false);
-                      }}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                        targetExt === fmt.ext
-                          ? 'bg-red-600 border-red-600 text-white shadow-sm'
-                          : 'bg-red-50/60 border-red-200 text-red-700 hover:bg-red-600 hover:text-white dark:bg-neutral-900 dark:border-red-900 dark:text-red-300'
-                      }`}
-                    >
-                      {fmt.label}
-                    </button>
-                  ))}
+                  {filteredReachableTargets.map((fmt) => {
+                    const localReady = backendOnline || canConvertInBrowser(sourceExt, fmt.ext);
+                    return (
+                      <button
+                        key={fmt.ext}
+                        type="button"
+                        onClick={() => {
+                          setTargetExt(fmt.ext);
+                          setIsSidebarOpen(false);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${
+                          targetExt === fmt.ext
+                            ? 'bg-red-600 border-red-600 text-white shadow-sm'
+                            : localReady
+                            ? 'bg-red-50/60 border-red-200 text-red-700 hover:bg-red-600 hover:text-white dark:bg-neutral-900 dark:border-red-900 dark:text-red-300'
+                            : 'bg-white border-neutral-200 text-neutral-400 hover:border-red-300 dark:bg-neutral-900 dark:border-neutral-800'
+                        }`}
+                      >
+                        <span>{fmt.label}</span>
+                        {!backendOnline && !localReady && (
+                          <span className="text-[9px] font-normal opacity-75">• Server</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
                 <p className="text-[11px] text-neutral-400">
-                  Incompatible targets are automatically disabled. Clicking an output selects it and closes this sidebar.
+                  Highlighted formats work directly on your device (Android, Windows, Mac, Linux) with no server required.
                 </p>
               </div>
             </div>

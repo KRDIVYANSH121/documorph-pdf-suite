@@ -14,21 +14,24 @@ export function downloadBlob(blob: Blob, filename: string): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  // Keep ObjectURL alive for 60s so mobile Download Managers (Android/iOS) complete reliably
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function triggerConfetti(): void {
   try {
     confetti({
-      particleCount: 80,
-      spread: 70,
+      particleCount: 70,
+      spread: 65,
       origin: { y: 0.6 },
-      colors: ['#6366f1', '#4f46e5', '#38bdf8', '#10b981', '#f59e0b'],
+      colors: ['#dc2626', '#ef4444', '#ffffff', '#f43f5e'],
     });
-  } catch (err) {
+  } catch {
     // Ignore confetti errors if canvas not supported
   }
 }

@@ -70,7 +70,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
         <input
           ref={inputRef}
           type="file"
-          accept={accept}
+          accept={accept === '*/*' ? undefined : accept}
           multiple={multiple}
           onChange={handleInputChange}
           className="hidden"
@@ -98,7 +98,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
       <input
         ref={inputRef}
         type="file"
-        accept={accept}
+        accept={accept === '*/*' ? undefined : accept}
         multiple={multiple}
         onChange={handleInputChange}
         className="hidden"

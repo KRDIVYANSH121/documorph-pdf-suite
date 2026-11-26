@@ -28,10 +28,17 @@ export const App: React.FC = () => {
     }
   }, [darkMode]);
 
-  // Harden client UI against casual right-click / DevTools shortcuts in production
+  // Harden desktop UI against casual right-click / DevTools shortcuts without breaking mobile touch or inputs
   useEffect(() => {
-    const blockContext = (e: MouseEvent) => e.preventDefault();
+    const isEditable = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+
+    const blockContext = (e: MouseEvent) => {
+      if (!isEditable(e.target)) e.preventDefault();
+    };
     const blockInspectKeys = (e: KeyboardEvent) => {
+      if (isEditable(e.target)) return;
       const key = e.key.toUpperCase();
       if (
         e.key === 'F12' ||
@@ -52,7 +59,7 @@ export const App: React.FC = () => {
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-200 select-none">
+    <div className="min-h-[100dvh] flex flex-col bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-200 overflow-x-hidden">
       <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} activeTab={activeTab} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-10">
